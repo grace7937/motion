@@ -1,6 +1,5 @@
 export class PageComponent {
- private element : HTMLUListElement;
-
+ private element: HTMLUListElement;
  constructor() {
      this.element = document.createElement('ul');
      this.element.setAttribute('class', 'page');
