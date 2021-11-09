@@ -1,21 +1,28 @@
+import { Hoverable, Droppable } from './../common/type';
+import { EnableDragging, EnableDrop, EnableHover } from '../../decorators/draggable.js';
+import { Draggable } from '../common/type.js';
 import { BaseComponent, Component } from './../component.js';
+
 export interface Composable {
   addChild(child: Component): void;
 }
 type OnCloseListener = () => void;
 type DragState = 'start' | 'stop' | 'enter' | 'leave';
 type OnDragStateListener<T extends Component> = (target: T, state: DragState) => void;
-interface SectionContainer extends Component, Composable {
+
+interface SectionContainer extends Component, Composable, Draggable, Hoverable {
   setOnCloseListener(listener: OnCloseListener): void;
   setOnDragStateListener(listener: OnDragStateListener<SectionContainer>): void;
   muteChildren(state: 'mute' | 'unmute'): void;
   getBoundingRect(): DOMRect;
   onDropped(): void;
 }
-
 type SectionContainerConstructor = {
   new (): SectionContainer;
 };
+
+@EnableDragging
+@EnableHover
 export class PageItemComponent extends BaseComponent<HTMLElement> implements SectionContainer {
   private closeListener?: OnCloseListener;
   private dragStateListener?: OnDragStateListener<PageItemComponent>;
@@ -30,18 +37,6 @@ export class PageItemComponent extends BaseComponent<HTMLElement> implements Sec
     closeBtn.onclick = () => {
       this.closeListener && this.closeListener();
     };
-    this.element.addEventListener('dragstart', (event: DragEvent) => {
-      this.onDragStart(event);
-    });
-    this.element.addEventListener('dragend', (event: DragEvent) => {
-      this.onDragEnd(event);
-    });
-    this.element.addEventListener('dragenter', (event: DragEvent) => {
-      this.onDragEnter(event);
-    });
-    this.element.addEventListener('dragleave', (event: DragEvent) => {
-      this.onDragLeave(event);
-    });
   }
   onDragStart(_: DragEvent) {
     this.notifyDragObservers('start');
@@ -59,11 +54,9 @@ export class PageItemComponent extends BaseComponent<HTMLElement> implements Sec
     this.notifyDragObservers('leave');
     this.element.classList.remove('drop-area');
   }
-
   onDropped() {
     this.element.classList.remove('drop-area');
   }
-
   notifyDragObservers(state: DragState) {
     this.dragStateListener && this.dragStateListener(this, state);
   }
@@ -88,27 +81,20 @@ export class PageItemComponent extends BaseComponent<HTMLElement> implements Sec
     return this.element.getBoundingClientRect();
   }
 }
-export class PageComponent extends BaseComponent<HTMLUListElement> implements Composable {
+
+@EnableDrop
+export class PageComponent
+  extends BaseComponent<HTMLUListElement>
+  implements Composable, Droppable {
   private children = new Set<SectionContainer>();
   private dragTarget?: SectionContainer;
   private dropTarget?: SectionContainer;
+
   constructor(private pageItemConstructor: SectionContainerConstructor) {
     super('<ul class="page"></ul>');
-    this.element.addEventListener('dragover', (event: DragEvent) => {
-      this.onDragOver(event);
-    });
-    this.element.addEventListener('drop', (event: DragEvent) => {
-      this.onDrop(event);
-    });
   }
-  onDragOver(event: DragEvent) {
-    event.preventDefault();
-    console.log('onDragOver');
-  }
+  onDragOver(_: DragEvent): void {}
   onDrop(event: DragEvent) {
-    console.log('onDrop', this.dropTarget);
-
-    event.preventDefault();
     if (!this.dropTarget) {
       return;
     }
@@ -120,7 +106,6 @@ export class PageComponent extends BaseComponent<HTMLUListElement> implements Co
     }
     this.dropTarget.onDropped();
   }
-
   addChild(section: Component) {
     const item = new this.pageItemConstructor();
     item.addChild(section);
@@ -142,3 +127,20 @@ export class PageComponent extends BaseComponent<HTMLUListElement> implements Co
           break;
         case 'enter':
           console.log('enter', target);
+          this.dropTarget = target;
+          break;
+        case 'leave':
+          console.log('leave', target);
+          this.dropTarget = undefined;
+          break;
+        default:
+          throw new Error(`unsupported state: ${state}`);
+      }
+    });
+  }
+  private updateSections(state: 'mute' | 'unmute') {
+    this.children.forEach((section: SectionContainer) => {
+      section.muteChildren(state);
+    });
+  }
+}
